@@ -19,6 +19,8 @@ type AgentDetails struct {
 	TokenEstimate *tokens.Estimate        `json:"tokenEstimate,omitempty"`
 	ToolCalls     []agent.ToolCallSummary `json:"toolCalls,omitempty"`
 	OutputSteps   []agent.OutputStep      `json:"outputSteps,omitempty"`
+	// ToolPhaseMs matches the Lightforge case clock: tool choice plus tool calls.
+	ToolPhaseMs int64 `json:"toolPhaseMs,omitempty"`
 }
 
 // PhaseOutput represents the output from a task phase (setup, agent, verify, or cleanup).
@@ -337,6 +339,9 @@ func (r *taskRunner) RunAgent(ctx context.Context, agentRunner agent.Runner) (*P
 		TokenEstimate: &tokenEstimate,
 		ToolCalls:     result.GetToolCalls(),
 		OutputSteps:   outputSteps,
+	}
+	if timed, ok := result.(interface{ GetToolPhaseMs() int64 }); ok {
+		agentDetails.ToolPhaseMs = timed.GetToolPhaseMs()
 	}
 
 	// Convert each OutputStep to a StepOutput for the phase

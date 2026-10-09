@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -172,6 +173,11 @@ func (s *refreshingTokenSource) Token(ctx context.Context) (*oauth2.Token, error
 	if err != nil {
 		return nil, err
 	}
+	if tok == nil {
+		log.Printf("mcp auth: fetched a new client-credentials token")
+	} else {
+		log.Printf("mcp auth: refreshed client-credentials token")
+	}
 	s.mu.Lock()
 	s.tok = fresh
 	s.mu.Unlock()
@@ -199,6 +205,7 @@ func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
+	log.Printf("mcp auth: HTTP 401, refreshing client-credentials token")
 	t.source.reset()
 	return t.roundTrip(req)
 }

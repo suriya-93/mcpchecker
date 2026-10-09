@@ -26,6 +26,9 @@ type acpAgent struct {
 	conn         *acp.AgentSideConnection
 	mu           sync.Mutex
 	sessions     map[acp.SessionId]*acpSession
+	// toolPhaseMs is the model turn that picks a tool plus the tool calls.
+	// The model turn that writes the final answer is not included.
+	toolPhaseMs int64
 }
 
 var _ acp.Agent = &acpAgent{}
@@ -246,6 +249,8 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 
 	agent := fantasy.NewAgent(a.model, opts...)
 
+	phaseStart := time.Now()
+	var lastTool time.Time
 	result, err := agent.Stream(promptCtx, fantasy.AgentStreamCall{
 		Prompt: prompt,
 		OnStepFinish: func(step fantasy.StepResult) error {
@@ -260,6 +265,7 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 			})
 		},
 		OnToolResult: func(result fantasy.ToolResultContent) error {
+			lastTool = time.Now()
 			output := ""
 			if result.Result != nil {
 				if textResult, ok := fantasy.AsToolResultOutputType[fantasy.ToolResultOutputContentText](result.Result); ok {
@@ -277,6 +283,14 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 			})
 		},
 	})
+
+	phase := time.Since(phaseStart)
+	if !lastTool.IsZero() {
+		phase = lastTool.Sub(phaseStart)
+	}
+	a.mu.Lock()
+	a.toolPhaseMs = phase.Milliseconds()
+	a.mu.Unlock()
 
 	// Only clear cancel if it's still ours (another Prompt may have started)
 	s.mu.Lock()
@@ -300,6 +314,13 @@ func (a *acpAgent) Prompt(ctx context.Context, params acp.PromptRequest) (acp.Pr
 			"usage": result.TotalUsage,
 		},
 	}, nil
+}
+
+// ToolPhaseMs is how long the prompt spent choosing and running tools.
+func (a *acpAgent) ToolPhaseMs() int64 {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.toolPhaseMs
 }
 
 func (a *acpAgent) toolInterceptorForSession(sessionId acp.SessionId) toolInterceptor {

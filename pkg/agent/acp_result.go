@@ -10,6 +10,12 @@ type acpResult struct {
 	updates     []acp.SessionUpdate
 	prompt      string
 	actualUsage *tokens.Usage
+	toolPhaseMs int64
+}
+
+// GetToolPhaseMs is the tool-selection turn plus tool calls, without the final answer turn.
+func (res *acpResult) GetToolPhaseMs() int64 {
+	return res.toolPhaseMs
 }
 
 var _ AgentResult = &acpResult{}

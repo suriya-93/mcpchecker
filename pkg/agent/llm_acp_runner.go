@@ -82,10 +82,16 @@ func (r *llmACPRunner) RunTask(ctx context.Context, prompt string) (AgentResult,
 		return nil, fmt.Errorf("failed to run LLM agent: %w", err)
 	}
 
+	var toolPhaseMs int64
+	if timed, ok := agent.(interface{ ToolPhaseMs() int64 }); ok {
+		toolPhaseMs = timed.ToolPhaseMs()
+	}
+
 	return &acpResult{
 		updates:     result.Updates,
 		prompt:      prompt,
 		actualUsage: result.Usage,
+		toolPhaseMs: toolPhaseMs,
 	}, nil
 }
 

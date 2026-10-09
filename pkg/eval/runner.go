@@ -41,6 +41,10 @@ type EvalResult struct {
 	AllAssertionsPassed bool                      `json:"allAssertionsPassed"`
 	CallHistory         *mcpproxy.CallHistory     `json:"callHistory"`
 
+	// AgentDurationMs is the agent phase only: model turns plus MCP tool calls.
+	// Verify and the later Lightforge judge are outside this clock.
+	AgentDurationMs int64 `json:"agentDurationMs,omitempty"`
+
 	// TokenEstimate contains token count estimates from agent execution.
 	// Uses tiktoken (cl100k_base encoding). Excludes system prompt and cache tokens.
 	TokenEstimate *tokens.Estimate `json:"tokenEstimate,omitempty"`
@@ -980,7 +984,12 @@ func (r *evalRunner) executeTaskSteps(
 	if util.IsVerbose(ctx) {
 		fmt.Printf("  → Agent '%s' is working…\n", agentRunner.AgentName())
 	}
+	agentStart := time.Now()
 	agentOutput, err := taskRunner.RunAgent(ctx, agentRunner)
+	result.AgentDurationMs = time.Since(agentStart).Milliseconds()
+	if agentOutput != nil && agentOutput.AgentDetails != nil && agentOutput.AgentDetails.ToolPhaseMs > 0 {
+		result.AgentDurationMs = agentOutput.AgentDetails.ToolPhaseMs
+	}
 	result.AgentOutput = agentOutput
 	if err != nil {
 		result.TaskPassed = false
